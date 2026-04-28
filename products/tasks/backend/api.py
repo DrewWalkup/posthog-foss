@@ -18,6 +18,7 @@ from django.utils import timezone
 import requests as http_requests
 import jsonschema
 import posthoganalytics
+from asgiref.sync import async_to_sync
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status, viewsets
 from rest_framework.authentication import SessionAuthentication
@@ -35,8 +36,6 @@ from posthog.permissions import APIScopePermission
 from posthog.rate_limit import CodeInviteThrottle
 from posthog.renderers import ServerSentEventRenderer
 from posthog.storage import object_storage
-
-from ee.hogai.utils.aio import async_to_sync
 
 from .automation_service import (
     delete_automation_schedule,

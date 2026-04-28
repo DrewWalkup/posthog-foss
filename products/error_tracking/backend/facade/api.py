@@ -83,10 +83,6 @@ def _to_issue(issue) -> contracts.ErrorTrackingIssue:
 
 
 def _to_issue_assignment_notification(assignment) -> contracts.ErrorTrackingIssueAssignmentNotification:
-    role_member_user_ids: list[int] = []
-    if assignment.role_id:
-        role_member_user_ids = list(assignment.role.members.values_list("id", flat=True))
-
     issue = assignment.issue
     return contracts.ErrorTrackingIssueAssignmentNotification(
         id=assignment.id,
@@ -100,7 +96,7 @@ def _to_issue_assignment_notification(assignment) -> contracts.ErrorTrackingIssu
         ),
         assigned_user_id=assignment.user_id,
         role_id=assignment.role_id,
-        role_member_user_ids=role_member_user_ids,
+        role_member_user_ids=[],
     )
 
 

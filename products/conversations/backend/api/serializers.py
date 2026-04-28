@@ -40,8 +40,6 @@ class TicketAssignmentSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.DictField(child=serializers.CharField(), allow_null=True))
     def get_role(self, obj):
-        if obj.role_id and obj.role:
-            return {"name": obj.role.name}
         return None
 
 

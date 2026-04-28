@@ -17,8 +17,6 @@ from posthog.models.team import Team
 from posthog.models.utils import UUIDTModel, sane_repr
 from posthog.utils import absolute_uri
 
-from ee.models.rbac.access_control import AccessControl
-
 if TYPE_CHECKING:
     from posthog.models import User
 
@@ -148,13 +146,19 @@ class OrganizationInvite(ModelActivityMixin, UUIDTModel):
                     # if the team doesn't exist, it was probably deleted. We can still continue with the invite.
                     continue
 
-                AccessControl.objects.create(
-                    team=team,
-                    resource="project",
-                    resource_id=str(team.id),
-                    organization_member=parent_membership,
-                    access_level=item["level"],
-                )
+                try:
+                    from ee.models.rbac.access_control import AccessControl
+                except ImportError:
+                    AccessControl = None
+
+                if AccessControl is not None:
+                    AccessControl.objects.create(
+                        team=team,
+                        resource="project",
+                        resource_id=str(team.id),
+                        organization_member=parent_membership,
+                        access_level=item["level"],
+                    )
 
             OrganizationInvite.objects.filter(
                 organization=self.organization, target_email__iexact=self.target_email

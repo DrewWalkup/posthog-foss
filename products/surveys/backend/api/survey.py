@@ -82,8 +82,6 @@ from products.surveys.backend.util import (
     get_unique_survey_event_uuids_sql_subquery,
 )
 
-from ee.surveys.summaries.headline_summary import generate_survey_headline
-
 # Constants for better maintainability
 logger = structlog.get_logger(__name__)
 CACHE_TIMEOUT_SECONDS = 300
@@ -2411,6 +2409,14 @@ class SurveyViewSet(TeamAndOrgViewSetMixin, AccessControlViewSetMixin, viewsets.
             return Response(
                 {"error": "AI data processing must be approved to generate summaries"},
                 status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            from ee.surveys.summaries.headline_summary import generate_survey_headline
+        except ImportError:
+            return Response(
+                {"error": "Survey headline summaries are not supported in FOSS"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         logger.info("[summary_headline] calling generate_survey_headline", survey_id=survey_id)

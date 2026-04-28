@@ -4,6 +4,7 @@ from uuid import UUID
 
 from posthog.constants import AvailableFeature
 from posthog.models import Insight, Organization, OrganizationMembership, Team, User
+from posthog.settings import EE_AVAILABLE
 
 from products.dashboards.backend.models.dashboard import Dashboard
 from products.dashboards.backend.models.dashboard_tile import DashboardTile
@@ -99,6 +100,9 @@ class UserPermissions:
 
     @cached_property
     def dashboard_privileges(self) -> dict[int, Dashboard.PrivilegeLevel]:
+        if not EE_AVAILABLE:
+            return {}
+
         try:
             from ee.models import DashboardPrivilege
 
@@ -113,6 +117,9 @@ class UserPermissions:
         Prefetch all AccessControl entries for teams in user's organizations.
         Returns a dict mapping team_id to list of access control entries.
         """
+        if not EE_AVAILABLE:
+            return {}
+
         from ee.models.rbac.access_control import AccessControl
 
         organization_ids = list(self.organizations.keys())
@@ -136,6 +143,9 @@ class UserPermissions:
         Prefetch all role memberships for the user.
         Returns a dict mapping organization_member_id to list of role_ids.
         """
+        if not EE_AVAILABLE:
+            return {}
+
         from ee.models.rbac.role import RoleMembership
 
         memberships = RoleMembership.objects.filter(user=self.user).values("organization_member_id", "role_id")

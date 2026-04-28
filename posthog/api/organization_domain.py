@@ -20,15 +20,43 @@ from posthog.models import OrganizationDomain, User
 from posthog.models.organization import Organization, OrganizationMembership
 from posthog.permissions import OrganizationAdminWritePermissions, TimeSensitiveActionPermission
 
-from ee.api.scim.utils import (
-    disable_scim_for_domain,
-    enable_scim_for_domain,
-    get_scim_base_url,
-    mask_email,
-    mask_string,
-    regenerate_scim_token,
-)
-from ee.models.scim_request_log import SCIMRequestLog
+if settings.EE_AVAILABLE:
+    from ee.api.scim.utils import (
+        disable_scim_for_domain,
+        enable_scim_for_domain,
+        get_scim_base_url,
+        mask_email,
+        mask_string,
+        regenerate_scim_token,
+    )
+    from ee.models.scim_request_log import SCIMRequestLog
+else:
+
+    def disable_scim_for_domain(*args: Any, **kwargs: Any) -> None:
+        raise exceptions.NotFound("SCIM is not available in FOSS.")
+
+
+    def enable_scim_for_domain(*args: Any, **kwargs: Any) -> str:
+        raise exceptions.NotFound("SCIM is not available in FOSS.")
+
+
+    def get_scim_base_url(*args: Any, **kwargs: Any) -> None:
+        return None
+
+
+    def mask_email(value: str) -> str:
+        return value
+
+
+    def mask_string(value: str) -> str:
+        return value
+
+
+    def regenerate_scim_token(*args: Any, **kwargs: Any) -> str:
+        raise exceptions.NotFound("SCIM is not available in FOSS.")
+
+
+    SCIMRequestLog = None
 
 DOMAIN_REGEX = r"^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$"
 
@@ -166,7 +194,7 @@ class OrganizationDomainSerializer(serializers.ModelSerializer):
         return instance
 
     def get_scim_base_url(self, obj: OrganizationDomain) -> str | None:
-        if not obj.has_scim:
+        if not settings.EE_AVAILABLE or not obj.has_scim:
             return None
         return get_scim_base_url(obj, self.context.get("request"))
 
@@ -174,22 +202,28 @@ class OrganizationDomainSerializer(serializers.ModelSerializer):
         return getattr(self, "_scim_plain_token", None)
 
 
-class SCIMRequestLogSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SCIMRequestLog
-        fields = (
-            "id",
-            "request_method",
-            "request_path",
-            "request_headers",
-            "request_body",
-            "response_status",
-            "response_body",
-            "identity_provider",
-            "duration_ms",
-            "created_at",
-        )
-        read_only_fields = fields
+if settings.EE_AVAILABLE:
+
+    class SCIMRequestLogSerializer(serializers.ModelSerializer):
+        class Meta:
+            model = SCIMRequestLog
+            fields = (
+                "id",
+                "request_method",
+                "request_path",
+                "request_headers",
+                "request_body",
+                "response_status",
+                "response_body",
+                "identity_provider",
+                "duration_ms",
+                "created_at",
+            )
+            read_only_fields = fields
+else:
+
+    class SCIMRequestLogSerializer(serializers.Serializer):
+        pass
 
 
 class SCIMRequestLogPagination(PageNumberPagination):
@@ -214,19 +248,26 @@ def _search_scim_logs(queryset: QuerySet, _name: str, value: str) -> QuerySet:
     return queryset.filter(q)
 
 
-class SCIMRequestLogFilter(django_filters.FilterSet):
-    status_min = django_filters.NumberFilter(field_name="response_status", lookup_expr="gte")
-    status_max = django_filters.NumberFilter(field_name="response_status", lookup_expr="lte")
-    search = django_filters.CharFilter(method="filter_search")
-    after = django_filters.IsoDateTimeFilter(field_name="created_at", lookup_expr="gte")
-    before = django_filters.IsoDateTimeFilter(field_name="created_at", lookup_expr="lte")
+if settings.EE_AVAILABLE:
 
-    class Meta:
-        model = SCIMRequestLog
-        fields: list[str] = []
+    class SCIMRequestLogFilter(django_filters.FilterSet):
+        status_min = django_filters.NumberFilter(field_name="response_status", lookup_expr="gte")
+        status_max = django_filters.NumberFilter(field_name="response_status", lookup_expr="lte")
+        search = django_filters.CharFilter(method="filter_search")
+        after = django_filters.IsoDateTimeFilter(field_name="created_at", lookup_expr="gte")
+        before = django_filters.IsoDateTimeFilter(field_name="created_at", lookup_expr="lte")
 
-    def filter_search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
-        return _search_scim_logs(queryset, name, value)
+        class Meta:
+            model = SCIMRequestLog
+            fields: list[str] = []
+
+        def filter_search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+            return _search_scim_logs(queryset, name, value)
+else:
+
+    class SCIMRequestLogFilter:
+        def __init__(self, *_args: Any, queryset: QuerySet, **_kwargs: Any):
+            self.qs = queryset
 
 
 @extend_schema(tags=["core"])
@@ -306,6 +347,9 @@ class OrganizationDomainViewset(TeamAndOrgViewSetMixin, ModelViewSet):
         """
         Regenerate SCIM bearer token.
         """
+        if not settings.EE_AVAILABLE:
+            raise exceptions.NotFound("SCIM is not available in FOSS.")
+
         domain: OrganizationDomain = self.get_object()
 
         if not domain.organization.is_feature_available(AvailableFeature.SCIM):
@@ -328,6 +372,9 @@ class OrganizationDomainViewset(TeamAndOrgViewSetMixin, ModelViewSet):
 
     @action(methods=["GET"], detail=True, url_path="scim/logs")
     def scim_logs(self, request: Request, **kwargs) -> response.Response:
+        if not settings.EE_AVAILABLE:
+            raise exceptions.NotFound("SCIM is not available in FOSS.")
+
         membership = OrganizationMembership.objects.filter(
             user=cast("User", request.user), organization=self.organization
         ).first()

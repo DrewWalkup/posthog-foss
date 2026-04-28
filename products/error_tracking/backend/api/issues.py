@@ -23,6 +23,7 @@ from posthog.models.activity_logging.activity_log import Change, Detail, load_ac
 from posthog.models.activity_logging.activity_page import activity_page_response
 from posthog.models.cohort.cohort import Cohort
 from posthog.models.organization import OrganizationMembership
+from posthog.settings import EE_AVAILABLE
 from posthog.tasks.email import send_error_tracking_issue_assigned
 
 from products.error_tracking.backend.facade import api as facade_api
@@ -403,6 +404,9 @@ def assign_issue(issue: ErrorTrackingIssue, assignee, organization, user, team_i
             if not OrganizationMembership.objects.filter(user_id=assignee["id"], organization=organization).exists():
                 raise ValidationError("Assignee user does not belong to this organization.")
         elif assignee["type"] == "role":
+            if not EE_AVAILABLE:
+                raise ValidationError("Assignee role is not supported in FOSS.")
+
             from ee.models.rbac.role import Role
 
             if not Role.objects.filter(id=assignee["id"], organization=organization).exists():

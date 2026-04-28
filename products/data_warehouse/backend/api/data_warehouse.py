@@ -39,8 +39,6 @@ from products.data_warehouse.backend.models.datawarehouse_saved_query import Dat
 from products.data_warehouse.backend.models.team_data_warehouse_config import TeamDataWarehouseConfig
 from products.data_warehouse.backend.models.util import get_view_or_table_by_name
 
-from ee.billing.billing_manager import BillingManager
-
 logger = structlog.get_logger(__name__)
 tracer = trace.get_tracer(__name__)
 
@@ -146,6 +144,8 @@ class DataWarehouseViewSet(TeamAndOrgViewSetMixin, viewsets.ViewSet):
         sources = ExternalDataSource.objects.filter(team_id=self.team_id, deleted=False)
 
         try:
+            from ee.billing.billing_manager import BillingManager
+
             billing_manager = BillingManager(get_cached_instance_license())
             org_billing = billing_manager.get_billing(organization=self.team.organization)
 

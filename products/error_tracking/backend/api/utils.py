@@ -37,7 +37,7 @@ class ErrorTrackingIssueAssignmentSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.CharField())
     def get_type(self, obj):
-        return "role" if obj.role else "user"
+        return "role" if obj.role_id else "user"
 
 
 class HasGetQueryset(Protocol):

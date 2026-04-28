@@ -92,12 +92,32 @@ from posthog.session_recordings.utils import (
     query_as_params_to_dict,
 )
 from posthog.settings.session_replay import SESSION_REPLAY_AI_REGEX_MODEL
-from posthog.temporal.session_replay.session_summary.summarize_session import execute_summarize_session_video_stream
 
-from ee.hogai.session_summaries.llm.call import get_openai_client
-from ee.hogai.session_summaries.session.output_data import OutcomeSerializer
-from ee.hogai.session_summaries.tracking import capture_session_summary_started, generate_tracking_id
-from ee.hogai.session_summaries.utils import serialize_to_sse_event
+if settings.EE_AVAILABLE:
+    from ee.hogai.session_summaries.llm.call import get_openai_client
+    from ee.hogai.session_summaries.session.output_data import OutcomeSerializer
+    from ee.hogai.session_summaries.tracking import capture_session_summary_started, generate_tracking_id
+    from ee.hogai.session_summaries.utils import serialize_to_sse_event
+else:
+
+    class OutcomeSerializer(serializers.Serializer):
+        pass
+
+
+    def get_openai_client():
+        raise exceptions.ValidationError("session summary is not supported in FOSS")
+
+
+    def capture_session_summary_started(*args: Any, **kwargs: Any) -> None:
+        return None
+
+
+    def generate_tracking_id() -> str:
+        return ""
+
+
+    def serialize_to_sse_event(*args: Any, **kwargs: Any) -> str:
+        return ""
 
 from ..models.product_intent.product_intent import ProductIntent
 from .queries.combine_session_ids_for_filtering import combine_session_id_filters
@@ -1388,6 +1408,8 @@ class SessionRecordingViewSet(
         hit Django's ``list()``-materialize fallback path and buffer the entire
         response server-side before any bytes reach the client.
         """
+        from posthog.temporal.session_replay.session_summary.summarize_session import execute_summarize_session_video_stream
+
         try:
             async for chunk in execute_summarize_session_video_stream(
                 session_id=session_id,

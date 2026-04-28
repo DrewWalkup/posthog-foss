@@ -19,7 +19,7 @@ from django.utils.timezone import now
 import structlog
 import pydantic_core
 import posthoganalytics
-from asgiref.sync import sync_to_async
+from asgiref.sync import async_to_sync, sync_to_async
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from opentelemetry import trace
@@ -70,8 +70,6 @@ from products.dashboards.backend.api.dashboard_template_json_schema_parser impor
 from products.dashboards.backend.models.dashboard import Dashboard
 from products.dashboards.backend.models.dashboard_tile import ButtonTile, DashboardTile, Text
 from products.llm_analytics.backend.dashboard_templates import get_llm_analytics_default_template
-
-from ee.hogai.utils.aio import async_to_sync
 
 logger = structlog.get_logger(__name__)
 

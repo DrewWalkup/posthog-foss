@@ -28,11 +28,7 @@ class RoleExternalReference(UUIDModel):
         on_delete=models.CASCADE,
         related_name="role_external_references",
     )
-    role = models.ForeignKey(
-        "ee.Role",
-        on_delete=models.CASCADE,
-        related_name="role_external_references",
-    )
+    role_id = models.UUIDField(db_index=True)
 
     # Which integration kind this comes from (reuses Integration.IntegrationKind values)
     provider = models.CharField(max_length=32)

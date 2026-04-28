@@ -59,14 +59,13 @@ from posthog.permissions import (
     TeamMemberStrictManagementPermission,
     get_organization_from_view,
 )
+from posthog.rbac.access_control_api_mixin import AccessControlViewSetMixin
 from posthog.scopes import APIScopeObjectOrNotSupported
 from posthog.tasks.tasks import delete_project_data_and_notify_task
 from posthog.user_permissions import UserPermissions, UserPermissionsSerializerMixin
 from posthog.utils import get_instance_realm, get_ip_address, get_week_start_for_country_code
 
 from products.signals.backend.models import SignalSourceConfig
-
-from ee.api.rbac.access_control import AccessControlViewSetMixin
 
 logger = structlog.get_logger(__name__)
 

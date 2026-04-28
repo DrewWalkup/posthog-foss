@@ -10,12 +10,24 @@ import structlog
 from posthog.security.url_validation import is_url_allowed
 from posthog.settings import SERVER_GATEWAY_INTERFACE
 
-from ee.hogai.utils.asgi import SyncIterableToAsync
-
 from .models import MCPServerInstallation, MCPServerInstallationTool
 from .oauth import TokenRefreshError, is_token_expiring, refresh_installation_token
 
 logger = structlog.get_logger(__name__)
+
+
+class SyncIterableToAsync:
+    def __init__(self, iterable: Iterator[bytes]):
+        self._iterator = iter(iterable)
+
+    def __aiter__(self) -> "SyncIterableToAsync":
+        return self
+
+    async def __anext__(self) -> bytes:
+        try:
+            return next(self._iterator)
+        except StopIteration as error:
+            raise StopAsyncIteration from error
 
 UPSTREAM_TIMEOUT = 180
 MAX_PROXY_BODY_SIZE = 1_048_576  # 1 MB

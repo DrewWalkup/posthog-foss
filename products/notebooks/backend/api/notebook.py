@@ -42,9 +42,21 @@ from products.notebooks.backend.python_analysis import analyze_python_globals, a
 from products.tasks.backend.services.sandbox import SandboxStatus
 from products.tasks.backend.temporal.exceptions import SandboxProvisionError
 
-from ee.hogai.utils.asgi import SyncIterableToAsync
-
 logger = structlog.get_logger(__name__)
+
+
+class SyncIterableToAsync:
+    def __init__(self, iterable):
+        self._iterator = iter(iterable)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._iterator)
+        except StopIteration as error:
+            raise StopAsyncIteration from error
 
 
 def depluralize(string: str | None) -> str | None:

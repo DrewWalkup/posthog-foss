@@ -141,14 +141,13 @@ RUN --mount=type=cache,id=uv-libxmlsec1.2.37-2,target=/root/.cache/uv \
 ENV PATH=/python-runtime/bin:$PATH \
     PYTHONPATH=/python-runtime
 
-# Add in Django deps
+# Add in Django deps. FOSS builds must not require Enterprise Edition sources.
 COPY manage.py manage.py
 COPY common/esbuilder common/esbuilder
 COPY common/hogvm common/hogvm/
 COPY common/migration_utils common/migration_utils/
 COPY posthog posthog/
 COPY products/ products/
-COPY ee ee/
 
 # Copy the built frontend assets and also the products.json file
 COPY --from=frontend-build /code/frontend/dist /code/frontend/dist
@@ -347,7 +346,6 @@ COPY --chown=posthog:posthog ./bin ./bin/
 COPY --chown=posthog:posthog ./rust/persons_migrations ./rust/persons_migrations/
 COPY --chown=posthog:posthog manage.py manage.py
 COPY --chown=posthog:posthog posthog posthog/
-COPY --chown=posthog:posthog ee ee/
 COPY --chown=posthog:posthog common/hogvm common/hogvm/
 COPY --chown=posthog:posthog common/migration_utils common/migration_utils/
 COPY --chown=posthog:posthog products products/

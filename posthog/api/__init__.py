@@ -1,8 +1,11 @@
 from rest_framework import decorators, exceptions, viewsets
 from rest_framework_extensions.routers import NestedRegistryItem
 
+from posthog.settings import EE_AVAILABLE
+
 # Preload to work around circular imports in `ee.hogai.{core.agent_modes,chat_agent,tools}`.
-import posthog.temporal.ai  # noqa: F401
+if EE_AVAILABLE:
+    import posthog.temporal.ai  # noqa: F401
 from posthog.api import data_color_theme, hog_flow, hog_flow_template, metalytics, my_notifications, project
 from posthog.api.batch_imports import BatchImportViewSet
 from posthog.api.csp_reporting import CSPReportingViewSet
@@ -13,14 +16,12 @@ from posthog.api.sdk_doctor import SdkDoctorViewSet
 from posthog.api.wizard import http as wizard
 from posthog.approvals import api as approval_api
 from posthog.batch_exports import http as batch_exports
-from posthog.settings import EE_AVAILABLE
 
 import products.logs.backend.api as logs
 import products.links.backend.api as link
 import products.tasks.backend.api as tasks
 import products.endpoints.backend.api as endpoints
 import products.signals.backend.views as signals
-import products.tasks.backend.seat_api as seats
 import products.conversations.backend.api as conversations
 import products.live_debugger.backend.api as live_debugger
 import products.web_analytics.backend.api as web_analytics_api
@@ -31,7 +32,6 @@ import products.early_access_features.backend.api as early_access_feature
 import products.customer_analytics.backend.api.views as customer_analytics
 import products.data_warehouse.backend.api.fix_hogql as fix_hogql
 import products.mcp_store.backend.presentation.views as mcp_store
-import products.legal_documents.backend.presentation.views as legal_documents
 from products.dashboards.backend.api import dashboard, dashboard_templates
 from products.data_modeling.backend.api import DAGViewSet, EdgeViewSet, NodeViewSet
 from products.data_warehouse.backend.api import (
@@ -94,7 +94,6 @@ from products.messaging.backend.api.message_preferences import MessagePreference
 from products.messaging.backend.api.message_templates import MessageTemplatesViewSet
 from products.notebooks.backend.api.notebook import NotebookViewSet
 from products.notifications.backend.presentation.views import NotificationsViewSet
-from products.posthog_ai.backend.api import MCPToolsViewSet
 from products.product_tours.backend.api import ProductTourViewSet
 from products.signals.backend.views import SignalViewSet
 from products.tracing.backend.presentation.views import SpansViewSet as TracingSpansViewSet
@@ -103,9 +102,6 @@ from products.visual_review.backend.presentation.views import (
     RepoViewSet as VisualReviewRepoViewSet,
     RunViewSet as VisualReviewRunViewSet,
 )
-
-from ee.api.session_summaries import SessionGroupSummaryViewSet
-from ee.api.vercel import vercel_installation, vercel_product, vercel_proxy, vercel_resource
 
 from ..heatmaps.heatmaps_api import HeatmapScreenshotViewSet, HeatmapViewSet, LegacyHeatmapViewSet, SavedHeatmapViewSet
 from ..session_recordings.session_recording_api import SessionRecordingViewSet
@@ -153,7 +149,6 @@ from . import (
     query,
     quick_filters,
     resource_transfer,
-    role_external_reference,
     scheduled_change,
     schema_property_group,
     search,
@@ -176,6 +171,15 @@ from .llm_prompt import LLMPromptViewSet
 from .oauth import OrganizationOAuthApplicationViewSet
 from .session import SessionViewSet
 from .web_analytics_filter_preset import WebAnalyticsFilterPresetViewSet
+
+if EE_AVAILABLE:
+    import products.tasks.backend.seat_api as seats
+    import products.legal_documents.backend.presentation.views as legal_documents
+    from products.posthog_ai.backend.api import MCPToolsViewSet
+
+    from ee.api.session_summaries import SessionGroupSummaryViewSet
+    from ee.api.vercel import vercel_installation, vercel_product, vercel_proxy, vercel_resource
+    from posthog.api import role_external_reference
 
 
 @decorators.api_view(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"])
@@ -312,7 +316,8 @@ projects_router.register(
 router.register(r"code/invites", tasks.CodeInviteViewSet, "code_invites")
 
 # Seats (proxied to billing service)
-router.register(r"seats", seats.SeatViewSet, "seats")
+if EE_AVAILABLE:
+    router.register(r"seats", seats.SeatViewSet, "seats")
 
 projects_router.register(r"surveys", survey.SurveyViewSet, "project_surveys", ["project_id"])
 projects_router.register(r"product_tours", ProductTourViewSet, "project_product_tours", ["project_id"])
@@ -681,12 +686,13 @@ organizations_router.register(
     "organization_domains",
     ["organization_id"],
 )
-organizations_router.register(
-    r"legal_documents",
-    legal_documents.LegalDocumentViewSet,
-    "organization_legal_documents",
-    ["organization_id"],
-)
+if EE_AVAILABLE:
+    organizations_router.register(
+        r"legal_documents",
+        legal_documents.LegalDocumentViewSet,
+        "organization_legal_documents",
+        ["organization_id"],
+    )
 organizations_router.register(
     r"proxy_records",
     proxy_record.ProxyRecordViewset,
@@ -705,12 +711,13 @@ organizations_router.register(
     "organization_resource_transfers",
     ["organization_id"],
 )
-organizations_router.register(
-    r"role_external_references",
-    role_external_reference.RoleExternalReferenceViewSet,
-    "organization_role_external_references",
-    ["organization_id"],
-)
+if EE_AVAILABLE:
+    organizations_router.register(
+        r"role_external_references",
+        role_external_reference.RoleExternalReferenceViewSet,
+        "organization_role_external_references",
+        ["organization_id"],
+    )
 organizations_router.register(
     r"welcome",
     welcome.WelcomeViewSet,
@@ -918,12 +925,13 @@ projects_router.register(
     ["project_id"],
 )
 
-projects_router.register(
-    r"session_group_summaries",
-    SessionGroupSummaryViewSet,
-    "project_session_group_summaries",
-    ["project_id"],
-)
+if EE_AVAILABLE:
+    projects_router.register(
+        r"session_group_summaries",
+        SessionGroupSummaryViewSet,
+        "project_session_group_summaries",
+        ["project_id"],
+    )
 
 environments_router.register(
     r"error_tracking/releases",
@@ -1485,12 +1493,13 @@ environments_router.register(
     ["team_id"],
 )
 
-environments_router.register(
-    r"mcp_tools",
-    MCPToolsViewSet,
-    "environment_mcp_tools",
-    ["team_id"],
-)
+if EE_AVAILABLE:
+    environments_router.register(
+        r"mcp_tools",
+        MCPToolsViewSet,
+        "environment_mcp_tools",
+        ["team_id"],
+    )
 
 environments_router.register(
     r"mcp_servers",

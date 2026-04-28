@@ -37,9 +37,9 @@ from posthog.models.person.person import Person
 from posthog.models.person.util import get_persons_by_distinct_ids
 from posthog.permissions import APIScopePermission, PostHogFeatureFlagPermission
 from posthog.rate_limit import AIBurstRateThrottle, AISustainedRateThrottle
+from posthog.settings import EE_AVAILABLE
 from posthog.utils import relative_date_parse
 
-from products.conversations.backend.ai.suggest import NoMessagesError, suggest_reply
 from products.conversations.backend.api.serializers import TicketAssignmentSerializer
 from products.conversations.backend.cache import (
     get_cached_unread_count,
@@ -53,8 +53,6 @@ from products.conversations.backend.events import (
 )
 from products.conversations.backend.models import Ticket, TicketAssignment
 from products.conversations.backend.models.constants import Channel, ChannelDetail, Priority, Status
-
-from ee.models.rbac.role import Role
 
 logger = structlog.get_logger(__name__)
 
@@ -181,7 +179,7 @@ class TicketViewSet(TaggedItemViewSetMixin, TeamAndOrgViewSetMixin, viewsets.Mod
     def safely_get_queryset(self, queryset: QuerySet) -> QuerySet:
         """Filter tickets by team."""
         queryset = queryset.filter(team_id=self.team_id)
-        queryset = queryset.select_related("assignment", "assignment__user", "assignment__role", "email_config")
+        queryset = queryset.select_related("assignment", "assignment__user", "email_config")
 
         status_param = self.request.query_params.get("status")
         if status_param:
@@ -684,6 +682,8 @@ class TicketViewSet(TaggedItemViewSetMixin, TeamAndOrgViewSetMixin, viewsets.Mod
         throttle_classes=[AIBurstRateThrottle, AISustainedRateThrottle],
     )
     def suggest_reply_action(self, request, *args, **kwargs):
+        from products.conversations.backend.ai.suggest import NoMessagesError, suggest_reply
+
         if not self.organization.is_ai_data_processing_approved:
             return Response(
                 {"detail": "AI data processing is not approved for this organization"},
@@ -783,6 +783,11 @@ def validate_assignee_membership(assignee, organization) -> None:
         if not OrganizationMembership.objects.filter(organization=organization, user_id=assignee["id"]).exists():
             raise serializers.ValidationError({"assignee": "user is not a member of this organization"})
     elif assignee["type"] == "role":
+        if not EE_AVAILABLE:
+            raise serializers.ValidationError({"assignee": "role assignees are not supported in FOSS"})
+
+        from ee.models.rbac.role import Role
+
         if not Role.objects.filter(id=assignee["id"], organization=organization).exists():
             raise serializers.ValidationError({"assignee": "role does not belong to this organization"})
 

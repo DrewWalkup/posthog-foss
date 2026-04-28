@@ -158,9 +158,7 @@ class SignalReport(UUIDModel):
     )
     cluster_centroid_updated_at = deprecate_field(models.DateTimeField(blank=True, null=True))
     # Deprecated - unused
-    conversation = deprecate_field(
-        models.ForeignKey("ee.Conversation", null=True, blank=True, on_delete=models.SET_NULL)
-    )
+    conversation_id = deprecate_field(models.UUIDField(null=True, blank=True, db_index=True))
     relevant_user_count = deprecate_field(models.IntegerField(blank=True, null=True))
 
     class Meta:

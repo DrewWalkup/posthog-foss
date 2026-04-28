@@ -5,6 +5,7 @@ from datetime import timedelta
 import structlog
 from corsheaders.defaults import default_headers
 
+from posthog.settings.ee import EE_AVAILABLE
 from posthog.scopes import get_scope_descriptions
 from posthog.settings.base_variables import BASE_DIR, DEBUG, TEST
 from posthog.settings.utils import get_from_env, get_list, str_to_bool
@@ -226,7 +227,7 @@ SOCIAL_AUTH_PIPELINE = (
     "social_core.pipeline.social_auth.social_details",
     "social_core.pipeline.social_auth.social_uid",
     "social_core.pipeline.social_auth.auth_allowed",
-    "ee.api.authentication.social_auth_allowed",
+    *(["ee.api.authentication.social_auth_allowed"] if EE_AVAILABLE else []),
     "social_core.pipeline.social_auth.social_user",
     "social_core.pipeline.social_auth.associate_by_email",
     "posthog.api.signup.social_create_user",
@@ -394,8 +395,14 @@ SPECTACULAR_SETTINGS = {
         "OrganizationMembershipLevelEnum": "posthog.models.organization.OrganizationMembership.Level",
         "SetupTaskId": "posthog.models.team.setup_tasks.SetupTaskId",
         "SurveyType": "products.surveys.backend.models.Survey.SurveyType",
-        "ConversationStatus": "ee.models.assistant.Conversation.Status",
-        "ConversationType": "ee.models.assistant.Conversation.Type",
+        **(
+            {
+                "ConversationStatus": "ee.models.assistant.Conversation.Status",
+                "ConversationType": "ee.models.assistant.Conversation.Type",
+            }
+            if EE_AVAILABLE
+            else {}
+        ),
         "DetailModeEnum": "products.llm_analytics.backend.summarization.models.SummarizationMode",
         "SavedQueryStatusEnum": "products.data_warehouse.backend.models.datawarehouse_saved_query.DataWarehouseSavedQuery.Status",
         "DesktopRecordingStatusEnum": "products.desktop_recordings.backend.models.DesktopRecording.Status",

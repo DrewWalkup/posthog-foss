@@ -49,9 +49,21 @@ from products.llm_analytics.backend.llm import (
 from products.llm_analytics.backend.llm.errors import UnsupportedProviderError
 from products.llm_analytics.backend.models.provider_keys import LLMProvider, LLMProviderKey
 
-from ee.hogai.utils.asgi import SyncIterableToAsync
-
 logger = structlog.get_logger(__name__)
+
+
+class SyncIterableToAsync:
+    def __init__(self, iterable: Generator[bytes, None, None]):
+        self._iterator = iter(iterable)
+
+    def __aiter__(self) -> "SyncIterableToAsync":
+        return self
+
+    async def __anext__(self) -> bytes:
+        try:
+            return next(self._iterator)
+        except StopIteration as error:
+            raise StopAsyncIteration from error
 
 MODELS_CACHE_TIMEOUT_SECONDS = 60
 

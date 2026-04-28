@@ -208,13 +208,11 @@ class Organization(ModelActivityMixin, UUIDTModel):  # type: ignore[django-manag
     members_can_invite = models.BooleanField(default=True, null=True, blank=True)
     members_can_use_personal_api_keys = models.BooleanField(default=True)
     allow_publicly_shared_resources = models.BooleanField(default=True)
-    default_role = models.ForeignKey(
-        "ee.Role",
-        on_delete=models.SET_NULL,
+    default_role_id = models.UUIDField(
         null=True,
         blank=True,
-        related_name="default_for_organizations",
-        help_text="Role automatically assigned to new members joining the organization",
+        db_index=True,
+        help_text="Role automatically assigned to new members joining the organization when EE is available.",
     )
 
     # Misc

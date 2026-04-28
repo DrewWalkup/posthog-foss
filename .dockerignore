@@ -14,7 +14,6 @@
 !packages/quill
 !dags
 !docs/onboarding
-!ee
 !frontend/@posthog
 !frontend/*.*
 !frontend/.storybook
@@ -64,7 +63,6 @@ packages/quill/**/node_modules
 packages/quill/**/dist
 products/**/node_modules
 nodejs/node_modules
-ee/**/node_modules
 docs/**/node_modules
 **/__pycache__
 rust/.env

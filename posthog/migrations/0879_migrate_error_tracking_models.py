@@ -80,7 +80,7 @@ class Migration(migrations.Migration):
                 ),
                 migrations.RemoveField(
                     model_name="errortrackinggroupingrule",
-                    name="role",
+                    name="role_id",
                 ),
                 migrations.RemoveField(
                     model_name="errortrackinggroupingrule",
@@ -104,7 +104,7 @@ class Migration(migrations.Migration):
                 ),
                 migrations.RemoveField(
                     model_name="errortrackingissueassignment",
-                    name="role",
+                    name="role_id",
                 ),
                 migrations.RemoveField(
                     model_name="errortrackingissueassignment",

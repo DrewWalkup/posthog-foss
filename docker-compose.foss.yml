@@ -1,0 +1,312 @@
+x-app-image: &app_image
+    image: local/posthog-foss:local
+    build:
+        context: .
+        dockerfile: Dockerfile
+
+x-node-image: &node_image
+    image: local/posthog-foss-node:local
+    build:
+        context: .
+        dockerfile: Dockerfile.node
+
+x-app-env: &app_env
+    SECRET_KEY: ${SECRET_KEY:-posthog-foss-local-secret-key}
+    DATABASE_URL: ${DATABASE_URL:-postgres://posthog:posthog@db:5432/posthog}
+    REDIS_URL: ${REDIS_URL:-redis://redis7:6379/}
+    CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:-clickhouse}
+    CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-posthog}
+    CLICKHOUSE_SECURE: 'false'
+    CLICKHOUSE_VERIFY: 'false'
+    KAFKA_HOSTS: ${KAFKA_HOSTS:-kafka:9092}
+    OBJECT_STORAGE_ENABLED: 'true'
+    OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-http://objectstorage:19000}
+    OBJECT_STORAGE_ACCESS_KEY_ID: ${OBJECT_STORAGE_ACCESS_KEY_ID:-object_storage_root_user}
+    OBJECT_STORAGE_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_SECRET_ACCESS_KEY:-object_storage_root_password}
+    OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-posthog}
+    OBJECT_STORAGE_REGION: ${OBJECT_STORAGE_REGION:-us-east-1}
+    ENCRYPTION_SALT_KEYS: ${ENCRYPTION_SALT_KEYS:-00beef0000beef0000beef0000beef00}
+    SITE_URL: ${SITE_URL:-http://localhost:8000}
+    OTEL_SDK_DISABLED: 'true'
+    DEPLOYMENT: foss
+    SKIP_SERVICE_VERSION_REQUIREMENTS: '1'
+
+x-node-env: &node_env
+    <<: *app_env
+    PERSONS_DATABASE_URL: ${PERSONS_DATABASE_URL:-postgres://posthog:posthog@db:5432/posthog}
+    BEHAVIORAL_COHORTS_DATABASE_URL: ${BEHAVIORAL_COHORTS_DATABASE_URL:-postgres://posthog:posthog@db:5432/posthog}
+    CDP_API_URL: http://plugins:6738
+    CDP_REDIS_HOST: redis7
+    COOKIELESS_REDIS_HOST: redis7
+    COOKIELESS_REDIS_PORT: 6379
+    FLAGS_REDIS_ENABLED: 'false'
+
+services:
+    proxy:
+        extends:
+            file: docker-compose.base.yml
+            service: proxy
+        ports:
+            - '8000:8000'
+        depends_on:
+            web:
+                condition: service_started
+            plugins:
+                condition: service_started
+            capture:
+                condition: service_started
+            replay-capture:
+                condition: service_started
+            feature-flags:
+                condition: service_started
+            objectstorage:
+                condition: service_started
+
+    db:
+        extends:
+            file: docker-compose.base.yml
+            service: db
+        ports:
+            - '5432:5432'
+        volumes:
+            - ./docker/postgres-init-scripts:/docker-entrypoint-initdb.d
+            - ./products:/products:ro
+            - postgres-15-data:/var/lib/postgresql/data
+
+    redis7:
+        extends:
+            file: docker-compose.base.yml
+            service: redis7
+        ports:
+            - '6379:6379'
+
+    clickhouse:
+        extends:
+            file: docker-compose.base.yml
+            service: clickhouse
+        hostname: clickhouse
+        ports:
+            - '8123:8123'
+            - '9000:9000'
+            - '9009:9009'
+        volumes:
+            - ./posthog/idl:/idl
+            - ./docker/clickhouse/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+            - ./docker/clickhouse/config.xml:/etc/clickhouse-server/config.xml
+            - ./docker/clickhouse/config.d/default.xml:/etc/clickhouse-server/config.d/default.xml
+            - ./docker/clickhouse/users-dev.xml:/etc/clickhouse-server/users.xml
+            - ./docker/clickhouse/user_defined_function.xml:/etc/clickhouse-server/user_defined_function.xml
+            - ./posthog/user_scripts:/var/lib/clickhouse/user_scripts
+
+    kafka:
+        extends:
+            file: docker-compose.base.yml
+            service: kafka
+        ports:
+            - '9092:9092'
+            - '19092:19092'
+
+    objectstorage:
+        extends:
+            file: docker-compose.base.yml
+            service: objectstorage
+        ports:
+            - '19000:19000'
+            - '19001:19001'
+
+    migrate:
+        <<: *app_image
+        command: sh -c "python manage.py migrate && python manage.py migrate_clickhouse && python manage.py run_async_migrations"
+        restart: 'no'
+        environment:
+            <<: *app_env
+        depends_on:
+            db:
+                condition: service_healthy
+            redis7:
+                condition: service_healthy
+            clickhouse:
+                condition: service_healthy
+            kafka:
+                condition: service_healthy
+            objectstorage:
+                condition: service_started
+
+    web:
+        <<: *app_image
+        command: ./bin/docker
+        restart: on-failure
+        environment:
+            <<: *app_env
+        depends_on:
+            db:
+                condition: service_healthy
+            redis7:
+                condition: service_healthy
+            clickhouse:
+                condition: service_healthy
+            kafka:
+                condition: service_healthy
+            objectstorage:
+                condition: service_started
+
+    worker:
+        <<: *app_image
+        command: ./bin/docker-worker-celery --with-scheduler
+        restart: on-failure
+        environment:
+            <<: *app_env
+            API_QUERIES_PER_TEAM: '{"1": 100}'
+        depends_on:
+            db:
+                condition: service_healthy
+            redis7:
+                condition: service_healthy
+            clickhouse:
+                condition: service_healthy
+            kafka:
+                condition: service_healthy
+            objectstorage:
+                condition: service_started
+
+    plugins:
+        <<: *node_image
+        command: node nodejs/dist/index.js
+        restart: on-failure
+        environment:
+            <<: *node_env
+        depends_on:
+            db:
+                condition: service_healthy
+            redis7:
+                condition: service_healthy
+            kafka:
+                condition: service_started
+
+    ingestion-general:
+        <<: *node_image
+        command: node nodejs/dist/index.js
+        restart: on-failure
+        environment:
+            <<: *node_env
+            PLUGIN_SERVER_MODE: ingestion-v2-combined
+        depends_on:
+            db:
+                condition: service_healthy
+            redis7:
+                condition: service_healthy
+            kafka:
+                condition: service_started
+
+    ingestion-sessionreplay:
+        <<: *node_image
+        command: node nodejs/dist/index.js
+        restart: on-failure
+        environment:
+            <<: *node_env
+            PLUGIN_SERVER_MODE: recordings-blob-ingestion-v2
+        depends_on:
+            db:
+                condition: service_healthy
+            redis7:
+                condition: service_healthy
+            kafka:
+                condition: service_started
+
+    recording-api:
+        <<: *node_image
+        command: node nodejs/dist/index.js
+        restart: on-failure
+        environment:
+            <<: *node_env
+            PLUGIN_SERVER_MODE: recording-api
+            SESSION_RECORDING_API_REDIS_HOST: redis7
+            SESSION_RECORDING_API_REDIS_PORT: 6379
+        depends_on:
+            db:
+                condition: service_healthy
+            redis7:
+                condition: service_healthy
+
+    capture:
+        extends:
+            file: docker-compose.base.yml
+            service: capture
+        image: local/posthog-capture:local
+        build:
+            context: rust/
+            args:
+                BIN: capture
+        depends_on:
+            kafka:
+                condition: service_healthy
+            redis7:
+                condition: service_healthy
+
+    replay-capture:
+        extends:
+            file: docker-compose.base.yml
+            service: replay-capture
+        image: local/posthog-replay-capture:local
+        build:
+            context: rust/
+            args:
+                BIN: capture
+        depends_on:
+            kafka:
+                condition: service_healthy
+            redis7:
+                condition: service_healthy
+
+    feature-flags:
+        extends:
+            file: docker-compose.base.yml
+            service: feature-flags
+        image: local/posthog-feature-flags:local
+        build:
+            context: rust/
+            args:
+                BIN: feature-flags
+        volumes:
+            - ./share:/share
+        environment:
+            WRITE_DATABASE_URL: ${DATABASE_URL:-postgres://posthog:posthog@db:5432/posthog}
+            READ_DATABASE_URL: ${DATABASE_URL:-postgres://posthog:posthog@db:5432/posthog}
+            PERSONS_WRITE_DATABASE_URL: ${PERSONS_DATABASE_URL:-postgres://posthog:posthog@db:5432/posthog}
+            PERSONS_READ_DATABASE_URL: ${PERSONS_DATABASE_URL:-postgres://posthog:posthog@db:5432/posthog}
+            MAXMIND_DB_PATH: /share/GeoLite2-City.mmdb
+            REDIS_URL: ${REDIS_URL:-redis://redis7:6379/}
+            ADDRESS: '0.0.0.0:3001'
+            RUST_LOG: info
+            COOKIELESS_REDIS_HOST: redis7
+            COOKIELESS_REDIS_PORT: 6379
+        depends_on:
+            db:
+                condition: service_healthy
+            redis7:
+                condition: service_healthy
+
+    property-defs-rs:
+        extends:
+            file: docker-compose.base.yml
+            service: property-defs-rs
+        image: local/posthog-property-defs-rs:local
+        build:
+            context: rust/
+            args:
+                BIN: property-defs-rs
+        environment:
+            DATABASE_URL: ${DATABASE_URL:-postgres://posthog:posthog@db:5432/posthog}
+            KAFKA_HOSTS: ${KAFKA_HOSTS:-kafka:9092}
+            SKIP_WRITES: 'false'
+            SKIP_READS: 'false'
+            FILTER_MODE: opt-out
+        depends_on:
+            db:
+                condition: service_healthy
+            kafka:
+                condition: service_started
+
+volumes:
+    postgres-15-data:
+    redpanda-data:
